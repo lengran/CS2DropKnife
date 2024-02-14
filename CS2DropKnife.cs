@@ -9,7 +9,7 @@ public class CS2DropKnife : BasePlugin
 {
     public override string ModuleName => "CS2 Drop Knife";
 
-    public override string ModuleVersion => "0.0.1";
+    public override string ModuleVersion => "1.0.0";
 
 	public override void Load(bool hotReload)
     {
@@ -17,6 +17,8 @@ public class CS2DropKnife : BasePlugin
 
 	    Console.WriteLine("[CS2DropKnife] Registering listeners.");
         RegisterListener<Listeners.OnMapStart>(OnMapStartHandler);
+		AddCommandListener("say", OnPlayerChat);
+		AddCommandListener("say_team", OnPlayerChatTeam);
     }
 
 	public void OnMapStartHandler(string map)
@@ -26,10 +28,33 @@ public class CS2DropKnife : BasePlugin
 
     [ConsoleCommand("css_drop", "Drop 5 copies of player's knife on the ground.")]
     [CommandHelper(whoCanExecute: CommandUsage.CLIENT_ONLY)]
-    public void OnPrefireCommand(CCSPlayerController player, CommandInfo commandInfo)
+    public void OnDropCommand(CCSPlayerController player, CommandInfo commandInfo)
     {
-        // Player might not be alive.
-        if (player.PlayerPawn?.Value == null || player.PlayerPawn?.Value.WeaponServices == null || player.PlayerPawn?.Value.ItemServices == null)
+        DropKnife(player);
+    }
+
+	private HookResult OnPlayerChat(CCSPlayerController? player, CommandInfo info)
+	{		
+		// Filter chat message
+		if (info.GetArg(1).StartsWith("!drop") || info.GetArg(1).StartsWith("/drop") || info.GetArg(1).StartsWith(".drop"))
+			DropKnife(player);
+
+		return HookResult.Continue;
+	}
+
+	private HookResult OnPlayerChatTeam(CCSPlayerController? player, CommandInfo info)
+	{		
+		// Filter chat message
+		if (info.GetArg(1).StartsWith("!drop") || info.GetArg(1).StartsWith("/drop") || info.GetArg(1).StartsWith(".drop"))
+			DropKnife(player);
+
+		return HookResult.Continue;
+	}
+
+	public void DropKnife(CCSPlayerController player)
+	{
+		// Player might not be alive.
+        if (player == null || player.PlayerPawn?.Value == null || player.PlayerPawn?.Value.WeaponServices == null || player.PlayerPawn?.Value.ItemServices == null)
 			return;
 
 		var weapons = player.PlayerPawn.Value.WeaponServices?.MyWeapons;
@@ -44,7 +69,7 @@ public class CS2DropKnife : BasePlugin
 			{
 				if (weapon.Value.DesignerName.Contains("knife") || weapon.Value.DesignerName.Contains("bayonet"))
 				{
-					Console.WriteLine("[CS2DropKnife] knife index = " + weapon.Index + ", entityindex = " + weapon.Value.Index + ", designer name = " + weapon.Value.DesignerName);
+					// Console.WriteLine("[CS2DropKnife] knife index = " + weapon.Index + ", entityindex = " + weapon.Value.Index + ", designer name = " + weapon.Value.DesignerName);
 					for (int i = 0; i < 5; i++)
 						player.GiveNamedItem(weapon.Value.DesignerName);
 					return;
@@ -53,5 +78,5 @@ public class CS2DropKnife : BasePlugin
 		}
 
 		player.PrintToChat("[CS2DropKnife] Can't find a knife on you. Get one and try again please.");
-    }
+	}
 }
