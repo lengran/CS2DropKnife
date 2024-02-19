@@ -3,7 +3,7 @@ A server-side CS2 plugin powered by CounterStrikeSharp that allows player to sha
 
 ## How to install
 
-Install CounterStrikeSharp first. Extract the folder you get from [Release](https://github.com/lengran/CS2DropKnife/releases) to the counterstrikesharp/plugins folder.
+Install CounterStrikeSharp first ([Installation Guide](https://docs.cssharp.dev/docs/guides/getting-started.html)). Extract the files downloaded from [Release](https://github.com/lengran/CS2DropKnife/releases) to the **game/csgo/addons/counterstrikesharp/plugins/CS2DropKnife** folder.
 
 ## How to use
 
