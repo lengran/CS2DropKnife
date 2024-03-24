@@ -7,10 +7,10 @@ Install CounterStrikeSharp first ([Installation Guide](https://docs.cssharp.dev/
 
 ## How to use
 
-As long as you have a knife equipped, type "!drop" in the chat box and you should see 5 of your knives dropped on the ground.
+As long as you have a knife equipped, type "!drop" or "!takeknife" in the chat box and you should see 5 of your knives dropped on the ground.
 
-## Version v0.0.1 is still useful
+## Which version should I use?
 
-To support some drop key-bind (commands "say !drop" or "say_team !drop" issued from the game console or via a key bind), [version v1.0.0](https://github.com/lengran/CS2DropKnife/releases/tag/v1.0.0) filters all chat messages to manually call the drop knife function.
+For most of the cases, I would recommand to use [the version without chat filtering](https://github.com/lengran/CS2DropKnife/releases/download/v1.1.0/CS2DropKnife-v1.1.0.zip). You can bind css_drop or css_takeknife to your prefered key to achieve the effect of one-key-drop-knife. 
 
-To avoid this message filtering feature, use [version v0.0.1](https://github.com/lengran/CS2DropKnife/releases/tag/v0.0.1) instead. You can also bind a dropping knife key by binding the command "css_drop" to your preferred keys.
+To support some drop key-bind (commands "say !drop" or "say_team !drop" issued from the game console or via a key-bind), [A version with chat filtering support](https://github.com/lengran/CS2DropKnife/releases/download/v1.1.0/CS2DropKnife-v1.1.0-with-chat-filtering.zip) is provided. This version filters all chat messages to manually call the drop knife function for you. However this might also cause performance downgrade and make the server laggy.

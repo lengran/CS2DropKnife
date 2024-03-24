@@ -9,7 +9,7 @@ public class CS2DropKnife : BasePlugin
 {
     public override string ModuleName => "CS2 Drop Knife";
 
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleVersion => "1.1.0";
 
     public override void Load(bool hotReload)
     {
@@ -17,8 +17,15 @@ public class CS2DropKnife : BasePlugin
 
         Console.WriteLine("[CS2DropKnife] Registering listeners.");
         RegisterListener<Listeners.OnMapStart>(OnMapStartHandler);
-        AddCommandListener("say", OnPlayerChat);
-        AddCommandListener("say_team", OnPlayerChatTeam);
+
+        // Enabling chat filtering might cause high frame time.
+        // AddCommandListener("say", OnPlayerChat);
+        // AddCommandListener("say_team", OnPlayerChatTeam);
+
+        if (hotReload)
+        {
+            Server.ExecuteCommand("mp_drop_knife_enable 1");
+        }
     }
 
     public void OnMapStartHandler(string map)
@@ -33,11 +40,21 @@ public class CS2DropKnife : BasePlugin
         DropKnife(player);
     }
 
+    [ConsoleCommand("css_takeknife", "Drop 5 copies of player's knife on the ground.")]
+    [CommandHelper(whoCanExecute: CommandUsage.CLIENT_ONLY)]
+    public void OnTakeKnifeCommand(CCSPlayerController player, CommandInfo commandInfo)
+    {
+        DropKnife(player);
+    }
+
     private HookResult OnPlayerChat(CCSPlayerController? player, CommandInfo info)
     {        
         // Filter chat message
-        if (info.GetArg(1).StartsWith("!drop") || info.GetArg(1).StartsWith("/drop") || info.GetArg(1).StartsWith(".drop"))
+        if (info.GetArg(1).StartsWith("!drop") || info.GetArg(1).StartsWith("/drop") || info.GetArg(1).StartsWith(".drop") ||
+        info.GetArg(1).StartsWith("!takeknife") || info.GetArg(1).StartsWith("/takeknife") || info.GetArg(1).StartsWith(".takeknife"))
+        {
             DropKnife(player);
+        }
 
         return HookResult.Continue;
     }
@@ -45,8 +62,11 @@ public class CS2DropKnife : BasePlugin
     private HookResult OnPlayerChatTeam(CCSPlayerController? player, CommandInfo info)
     {        
         // Filter chat message
-        if (info.GetArg(1).StartsWith("!drop") || info.GetArg(1).StartsWith("/drop") || info.GetArg(1).StartsWith(".drop"))
+        if (info.GetArg(1).StartsWith("!drop") || info.GetArg(1).StartsWith("/drop") || info.GetArg(1).StartsWith(".drop") ||
+        info.GetArg(1).StartsWith("!takeknife") || info.GetArg(1).StartsWith("/takeknife") || info.GetArg(1).StartsWith(".takeknife"))
+        {
             DropKnife(player);
+        }
 
         return HookResult.Continue;
     }
@@ -55,12 +75,17 @@ public class CS2DropKnife : BasePlugin
     {
         // Player might not be alive.
         if (player == null || player.PlayerPawn?.Value == null || player.PlayerPawn?.Value.WeaponServices == null || player.PlayerPawn?.Value.ItemServices == null)
+        {
             return;
+        }
 
         var weapons = player.PlayerPawn.Value.WeaponServices?.MyWeapons;
 
         // Player might have no weapon.
-        if (weapons == null) return;
+        if (weapons == null) 
+        {
+            return;
+        }
 
         // Find the knife.
         foreach (var weapon in weapons)
@@ -71,7 +96,10 @@ public class CS2DropKnife : BasePlugin
                 {
                     // Console.WriteLine("[CS2DropKnife] knife index = " + weapon.Index + ", entityindex = " + weapon.Value.Index + ", designer name = " + weapon.Value.DesignerName);
                     for (int i = 0; i < 5; i++)
+                    {
                         player.GiveNamedItem(weapon.Value.DesignerName);
+                    }
+
                     return;
                 }
             }
