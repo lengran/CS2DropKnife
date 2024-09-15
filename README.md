@@ -9,6 +9,8 @@ Install CounterStrikeSharp first ([Installation Guide](https://docs.cssharp.dev/
 
 As long as you have a knife equipped, type "!drop" or "!takeknife" in the chat box and you should see 5 of your knives dropped on the ground.
 
+Note: Every player is allowed to drop knives only once in each round.
+
 ## Which version should I use?
 
 For most of the cases, I would recommand to use [the version without chat filtering](https://github.com/lengran/CS2DropKnife/releases/download/v1.1.0/CS2DropKnife-v1.1.0.zip). You can bind css_drop or css_takeknife to your prefered key to achieve the effect of one-key-drop-knife. 
