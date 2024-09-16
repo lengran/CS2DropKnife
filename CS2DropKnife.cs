@@ -4,6 +4,7 @@ using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API;
 using System.Numerics;
 using CounterStrikeSharp.API.Modules.Entities;
+using CounterStrikeSharp.API.Modules.Menu;
 
 namespace CS2DropKnife;
 
@@ -11,7 +12,7 @@ public class CS2DropKnife : BasePlugin
 {
     public override string ModuleName => "CS2 Drop Knife";
 
-    public override string ModuleVersion => "2.0.0";
+    public override string ModuleVersion => "2.1.0";
 
     private List<int> player_slot_ids = new List<int>();
 
@@ -122,5 +123,39 @@ public class CS2DropKnife : BasePlugin
         // }
 
         // player.PrintToChat("[CS2DropKnife] Can't find a knife on you. Get one and try again please.");
+    }
+
+
+    [GameEventHandler]
+    public HookResult OnPlayerChat(EventPlayerChat @event, GameEventInfo info)
+    {
+        int player_slot = @event.Userid;
+
+        try
+        {
+            CCSPlayerController player = Utilities.GetPlayerFromSlot(player_slot)!;
+            if (player == null || !player.IsValid || player.IsBot || player.IsHLTV)
+            {
+                return HookResult.Continue;
+            }
+
+            string chat_message = @event.Text;
+
+            if (chat_message.StartsWith("!drop") 
+            || chat_message.StartsWith("/drop")
+            || chat_message.StartsWith(".drop")
+            || chat_message.StartsWith("!takeknife")
+            || chat_message.StartsWith("/takeknife")
+            || chat_message.StartsWith(".takeknife"))
+            {
+                DropKnife(player);
+            }
+        }
+        catch (System.Exception)
+        {
+            return HookResult.Continue;
+        }
+
+        return HookResult.Continue;
     }
 }
