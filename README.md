@@ -25,4 +25,4 @@ Version 1.0 has no regulations. You can drop whenever you want.
 
 Version 2.0 allows each player to only drop once in a round.
 
-Version 3.0 only knife dropping in freeze time (before round actually starts) and the knife will be sent directly to teammates.
+Version 3.0 only allows knife dropping in freeze time (before round actually starts) and the knife will be sent directly to teammates.
