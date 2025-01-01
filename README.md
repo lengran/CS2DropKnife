@@ -13,6 +13,16 @@ Note: Every player is allowed to drop knives only once in each round.
 
 ## Which version should I use?
 
-For most of the cases, I would recommand to use [the version without chat filtering](https://github.com/lengran/CS2DropKnife/releases/download/v1.1.0/CS2DropKnife-v1.1.0.zip). You can bind css_drop or css_takeknife to your prefered key to achieve the effect of one-key-drop-knife. 
+### Chat filtering
 
-To support some drop key-bind (commands "say !drop" or "say_team !drop" issued from the game console or via a key-bind), [A version with chat filtering support](https://github.com/lengran/CS2DropKnife/releases/download/v1.1.0/CS2DropKnife-v1.1.0-with-chat-filtering.zip) is provided. This version filters all chat messages to manually call the drop knife function for you. However this might also cause performance downgrade and make the server laggy.
+For most of the cases, I would recommand to use **the version without chat filtering**. You can bind css_drop or css_takeknife to your prefered key to achieve the effect of one-key-drop-knife. 
+
+To support some drop key-bind (commands "say !drop" or "say_team !drop" issued from the game console or via a key-bind), **A version with chat filtering support** is provided. This version filters all chat messages to manually call the drop knife function for you. However this might also cause performance downgrade and make the server laggy.
+
+### Different drop rules
+
+Version 1.0 has no regulations. You can drop whenever you want.
+
+Version 2.0 allows each player to only drop once in a round.
+
+Version 3.0 only knife dropping in freeze time (before round actually starts) and the knife will be sent directly to teammates.
