@@ -1,0 +1,10 @@
+{
+    // If you want the knives to be sent directly to the teammates, set this to true.
+    "DirectSend":true,
+    // This restricts players to drop knife only once in every round.
+    "OncePerRound":true,
+    // Players are only allowed to drop knife in the freeze time before rounds start.
+    "FreezeTimeOnly":true,
+    // If players have bound "say !drop", this can be enabled to allow such shortcuts. But it might damage server performance. It is strongly suggested to bind "css_drop" instead of "say" or "teamsay" commands.
+    "ChatFiltering":false
+}
