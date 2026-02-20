@@ -7,27 +7,23 @@ using CounterStrikeSharp.API.Modules.Events;
 using System.Collections.Concurrent;
 using System.Text.Json;
 
-namespace CS2DropKnife;
+namespace 背水平台;
 
-public class CS2DropKnife : BasePlugin
+public class 背水平台 : BasePlugin
 {
-    public override string ModuleName => "CS2DropKnife";
-    public override string ModuleVersion => "4.2.0";
+    public override string ModuleName => "背水平台";
+    public override string ModuleVersion => "4.2.1"; // 版本号递增以区分
     public override string ModuleAuthor => "优化版";
     public override string ModuleDescription => "允许玩家掉落/分享刀具给队友";
 
-    // 使用 HashSet 提高查找效率
-    private HashSet<int> _allowedPlayerSlots = new();
+    // 记录本回合已经发过刀的玩家（用于每回合一次限制）
+    private HashSet<int> _usedThisRound = new();
     private ConcurrentDictionary<int, DateTime> _cooldowns = new();
-    
-    // 缓存阵营玩家列表
-    private HashSet<int> _ctPlayers = new();
-    private HashSet<int> _tPlayers = new();
-    
-    // 缓存游戏规则对象
+
+    // 缓存游戏规则对象（短暂缓存，减少查询）
     private CCSGameRules? _cachedGameRules;
     private DateTime _lastRulesCacheTime = DateTime.MinValue;
-    
+
     private PluginConfig _config = new();
     private string _configPath = string.Empty;
 
@@ -35,35 +31,27 @@ public class CS2DropKnife : BasePlugin
     {
         base.Load(hotReload);
 
-        // 初始化配置路径
         _configPath = Path.Combine(ModuleDirectory, "config.json");
-        
-        Console.WriteLine($"[CS2DropKnife] 插件加载中... 路径: {_configPath}");
-        
-        // 加载配置
+        Console.WriteLine($"[背水平台] 插件加载中... 路径: {_configPath}");
+
         LoadConfig();
-        
-        // 注册事件监听器
+
+        // 注册必要的事件
         RegisterListener<Listeners.OnMapStart>(OnMapStartHandler);
         RegisterEventHandler<EventRoundStart>(OnRoundStart, HookMode.Pre);
         RegisterEventHandler<EventRoundEnd>(OnRoundEnd, HookMode.Pre);
-        RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull, HookMode.Pre);
-        
-        // 启用服务器掉刀功能
+
+        // 启用服务器掉刀功能（地图切换时也会再次执行）
         Server.ExecuteCommand("mp_drop_knife_enable 1");
-        
-        Console.WriteLine($"[CS2DropKnife] 插件已加载 v{ModuleVersion}");
+
+        Console.WriteLine($"[背水平台] 插件已加载 v{ModuleVersion}");
     }
 
     public override void Unload(bool hotReload)
     {
-        // 清理数据
-        _allowedPlayerSlots.Clear();
-        _ctPlayers.Clear();
-        _tPlayers.Clear();
+        _usedThisRound.Clear();
         _cooldowns.Clear();
-        
-        Console.WriteLine("[CS2DropKnife] 插件已卸载");
+        Console.WriteLine("[背水平台] 插件已卸载");
         base.Unload(hotReload);
     }
 
@@ -71,10 +59,8 @@ public class CS2DropKnife : BasePlugin
     {
         try
         {
-            // 确保目录存在
             if (!Directory.Exists(ModuleDirectory))
             {
-                Console.WriteLine($"[CS2DropKnife] 创建插件目录: {ModuleDirectory}");
                 Directory.CreateDirectory(ModuleDirectory);
             }
 
@@ -82,17 +68,16 @@ public class CS2DropKnife : BasePlugin
             {
                 var json = File.ReadAllText(_configPath);
                 _config = JsonSerializer.Deserialize<PluginConfig>(json) ?? new PluginConfig();
-                Console.WriteLine($"[CS2DropKnife] 配置加载成功: {_configPath}");
+                Console.WriteLine($"[背水平台] 配置加载成功");
             }
             else
             {
-                Console.WriteLine($"[CS2DropKnife] 配置文件不存在，创建默认配置: {_configPath}");
                 SaveConfig();
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[CS2DropKnife] 加载配置时出错: {ex.Message}");
+            Console.WriteLine($"[背水平台] 加载配置时出错: {ex.Message}");
             _config = new PluginConfig();
         }
     }
@@ -104,99 +89,54 @@ public class CS2DropKnife : BasePlugin
             var options = new JsonSerializerOptions { WriteIndented = true };
             var json = JsonSerializer.Serialize(_config, options);
             File.WriteAllText(_configPath, json);
-            Console.WriteLine($"[CS2DropKnife] 配置已保存: {_configPath}");
+            Console.WriteLine($"[背水平台] 配置已保存");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[CS2DropKnife] 保存配置时出错: {ex.Message}");
+            Console.WriteLine($"[背水平台] 保存配置时出错: {ex.Message}");
         }
     }
 
     [GameEventHandler]
     public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
-        // 清除上回合数据
-        _allowedPlayerSlots.Clear();
-        _ctPlayers.Clear();
-        _tPlayers.Clear();
+        // 重置本回合已发刀记录
+        _usedThisRound.Clear();
         _cachedGameRules = null;
-        
-        // 收集当前所有玩家
-        var players = Utilities.GetPlayers();
-        foreach (var player in players)
-        {
-            if (!IsValidPlayer(player))
-                continue;
 
-            _allowedPlayerSlots.Add(player.Slot);
-            
-            // 按阵营分组
-            if (player.Team == CsTeam.CounterTerrorist)
-                _ctPlayers.Add(player.Slot);
-            else if (player.Team == CsTeam.Terrorist)
-                _tPlayers.Add(player.Slot);
-        }
-        
-        Console.WriteLine($"[CS2DropKnife] 回合开始: {_allowedPlayerSlots.Count} 名玩家已注册");
+        // 再次确保掉刀功能启用（防止地图 cfg 覆盖）
+        Server.ExecuteCommand("mp_drop_knife_enable 1");
+
         return HookResult.Continue;
     }
 
     [GameEventHandler]
     public HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
     {
-        // 清理冷却时间过期的记录
+        // 清理过期的冷却记录
         var now = DateTime.Now;
-        var expiredKeys = new List<int>();
-        
-        foreach (var kvp in _cooldowns)
-        {
-            if ((now - kvp.Value).TotalSeconds > _config.CooldownSeconds)
-            {
-                expiredKeys.Add(kvp.Key);
-            }
-        }
-        
-        foreach (var key in expiredKeys)
+        var expired = _cooldowns.Where(kvp => (now - kvp.Value).TotalSeconds > _config.CooldownSeconds)
+                                 .Select(kvp => kvp.Key)
+                                 .ToList();
+        foreach (var key in expired)
         {
             _cooldowns.TryRemove(key, out _);
         }
-        
-        return HookResult.Continue;
-    }
 
-    [GameEventHandler]
-    public HookResult OnPlayerConnectFull(EventPlayerConnectFull @event, GameEventInfo info)
-    {
-        var player = @event.Userid;
-        
-        if (!IsValidPlayer(player))
-            return HookResult.Continue;
-
-        // 新玩家添加到允许列表
-        _allowedPlayerSlots.Add(player.Slot);
-        
-        // 根据实际阵营添加
-        if (player.Team == CsTeam.CounterTerrorist)
-            _ctPlayers.Add(player.Slot);
-        else if (player.Team == CsTeam.Terrorist)
-            _tPlayers.Add(player.Slot);
-        
         return HookResult.Continue;
     }
 
     public void OnMapStartHandler(string map)
     {
-        // 重置所有数据
-        _allowedPlayerSlots.Clear();
-        _ctPlayers.Clear();
-        _tPlayers.Clear();
+        // 重置所有运行时状态
+        _usedThisRound.Clear();
         _cooldowns.Clear();
         _cachedGameRules = null;
-        
+
         // 确保掉刀功能启用
         Server.ExecuteCommand("mp_drop_knife_enable 1");
-        
-        Console.WriteLine($"[CS2DropKnife] 地图 {map} 已开始");
+
+        Console.WriteLine($"[背水平台] 地图 {map} 已开始");
     }
 
     [ConsoleCommand("css_drop", "掉落刀具给队友")]
@@ -226,14 +166,12 @@ public class CS2DropKnife : BasePlugin
         var targetName = command.GetArg(1);
         CCSPlayerController? target = null;
 
-        // 尝试通过 userid 查找
         if (targetName.StartsWith("#") && int.TryParse(targetName[1..], out int userId))
         {
             target = Utilities.GetPlayerFromUserid(userId);
         }
         else
         {
-            // 通过名称查找
             target = Utilities.GetPlayers()
                 .FirstOrDefault(p => p.PlayerName.Equals(targetName, StringComparison.OrdinalIgnoreCase));
         }
@@ -245,7 +183,7 @@ public class CS2DropKnife : BasePlugin
         }
 
         ForceDropKnife(target);
-        command.ReplyToCommand($"已强制 {target.PlayerName} 掉落刀具");
+        command.ReplyToCommand($"已强制 {target.PlayerName} 发刀！");
     }
 
     [ConsoleCommand("css_dropcfg", "配置插件")]
@@ -274,7 +212,7 @@ public class CS2DropKnife : BasePlugin
                     message = $"冻结时间限制: {freezeTime}";
                 }
                 break;
-                
+
             case "directsend":
                 if (bool.TryParse(value, out bool directSend))
                 {
@@ -283,7 +221,7 @@ public class CS2DropKnife : BasePlugin
                     message = $"直接传送: {directSend}";
                 }
                 break;
-                
+
             case "onceperround":
                 if (bool.TryParse(value, out bool oncePerRound))
                 {
@@ -292,7 +230,7 @@ public class CS2DropKnife : BasePlugin
                     message = $"每回合一次: {oncePerRound}";
                 }
                 break;
-                
+
             case "chatfilter":
                 if (bool.TryParse(value, out bool chatFilter))
                 {
@@ -301,7 +239,7 @@ public class CS2DropKnife : BasePlugin
                     message = $"聊天过滤: {chatFilter}";
                 }
                 break;
-                
+
             case "cooldown":
                 if (int.TryParse(value, out int cooldown) && cooldown >= 0)
                 {
@@ -310,7 +248,7 @@ public class CS2DropKnife : BasePlugin
                     message = $"冷却时间: {cooldown}秒";
                 }
                 break;
-                
+
             case "maxknives":
                 if (int.TryParse(value, out int maxKnives) && maxKnives > 0)
                 {
@@ -319,7 +257,7 @@ public class CS2DropKnife : BasePlugin
                     message = $"最大刀具数: {maxKnives}";
                 }
                 break;
-                
+
             default:
                 message = "未知设置";
                 break;
@@ -328,12 +266,11 @@ public class CS2DropKnife : BasePlugin
         if (success)
         {
             SaveConfig();
-            // 使用绿色前缀回复管理员
-            command.ReplyToCommand($"\x04[CS2DropKnife]\x01 {message}");
+            command.ReplyToCommand($"\x04[背水平台]\x01 {message}");
         }
         else
         {
-            command.ReplyToCommand($"\x04[CS2DropKnife]\x01 无效值: {message}");
+            command.ReplyToCommand($"\x04[背水平台]\x01 无效值: {message}");
         }
     }
 
@@ -342,14 +279,14 @@ public class CS2DropKnife : BasePlugin
         if (!IsValidPlayer(player) || !player.PawnIsAlive)
             return;
 
-        // 检查玩家是否允许掉刀
-        if (_config.OncePerRound && !_allowedPlayerSlots.Contains(player.Slot))
+        // 每回合一次限制检查
+        if (_config.OncePerRound && _usedThisRound.Contains(player.Slot))
         {
-            PrintToPlayer(player, "你本回合已经使用过掉刀功能了！");
+            PrintToPlayer(player, "你本回合已经发过刀了！");
             return;
         }
 
-        // 检查冷却时间
+        // 冷却时间检查
         if (_config.CooldownSeconds > 0 && _cooldowns.TryGetValue(player.Slot, out var lastDrop))
         {
             var cooldownLeft = _config.CooldownSeconds - (DateTime.Now - lastDrop).TotalSeconds;
@@ -360,26 +297,26 @@ public class CS2DropKnife : BasePlugin
             }
         }
 
-        // 检查冻结时间限制
+        // 冻结时间限制检查
         if (_config.FreezeTimeOnly)
         {
             var gameRules = GetGameRules();
             if (gameRules != null && !gameRules.FreezePeriod)
             {
-                PrintToPlayer(player, "只能在冻结时间使用掉刀功能！");
+                PrintToPlayer(player, "只能在冻结时间使用发刀功能！");
                 return;
             }
         }
 
-        // 获取队友
+        // 获取所有活着的队友（实时查询，不依赖缓存）
         var teammates = GetTeammates(player);
         if (teammates.Count == 0)
         {
-            PrintToPlayer(player, "没有可分享的队友！");
+            PrintToPlayer(player, "没有可发刀的队友！");
             return;
         }
 
-        // 限制生成数量
+        // 限制单次发刀数量
         if (_config.MaxKnivesPerDrop > 0 && teammates.Count > _config.MaxKnivesPerDrop)
         {
             teammates = teammates.Take(_config.MaxKnivesPerDrop).ToList();
@@ -389,7 +326,7 @@ public class CS2DropKnife : BasePlugin
         var knifeInfo = GetPlayerKnife(player);
         if (knifeInfo.KnifePointer == IntPtr.Zero || string.IsNullOrEmpty(knifeInfo.DesignerName))
         {
-            PrintToPlayer(player, "你没有可掉落的刀具！");
+            PrintToPlayer(player, "你没有可掉落的刀！");
             return;
         }
 
@@ -403,13 +340,13 @@ public class CS2DropKnife : BasePlugin
 
         if (successfulDrops > 0)
         {
-            PrintToPlayer(player, $"已为 {successfulDrops} 名队友掉落刀具！");
-            
-            // 应用限制
+            PrintToPlayer(player, $"已为 {successfulDrops} 名队友发刀！");
+
+            // 标记本回合已使用（仅在每回合一次限制启用时）
             if (_config.OncePerRound)
-                _allowedPlayerSlots.Remove(player.Slot);
-            
-            // 设置冷却时间
+                _usedThisRound.Add(player.Slot);
+
+            // 记录冷却时间
             if (_config.CooldownSeconds > 0)
                 _cooldowns[player.Slot] = DateTime.Now;
         }
@@ -433,7 +370,7 @@ public class CS2DropKnife : BasePlugin
                 successfulDrops++;
         }
 
-        Console.WriteLine($"[CS2DropKnife] 管理员强制掉落: {player.PlayerName} 为 {successfulDrops} 名队友掉落刀具");
+        Console.WriteLine($"[背水平台] 管理员强制掉落: {player.PlayerName} 为 {successfulDrops} 名队友发刀");
     }
 
     private (IntPtr KnifePointer, string DesignerName) GetPlayerKnife(CCSPlayerController player)
@@ -442,14 +379,14 @@ public class CS2DropKnife : BasePlugin
         if (pawn?.WeaponServices == null)
             return (IntPtr.Zero, "");
 
-        // 先检查活动武器
+        // 先检查当前激活武器
         var activeWeapon = pawn.WeaponServices.ActiveWeapon.Value;
         if (activeWeapon != null && IsKnifeWeapon(activeWeapon.DesignerName))
         {
             return ((IntPtr)activeWeapon.Index, activeWeapon.DesignerName);
         }
 
-        // 检查所有武器
+        // 再遍历所有武器
         var weapons = pawn.WeaponServices.MyWeapons;
         if (weapons == null)
             return (IntPtr.Zero, "");
@@ -476,24 +413,22 @@ public class CS2DropKnife : BasePlugin
 
         try
         {
-            // 为队友生成刀具
             IntPtr knifePointer = fromPlayer.GiveNamedItem(knifeDesignerName);
-            
+
             if (knifePointer != IntPtr.Zero && _config.DirectSend)
             {
-                // 直接传送给队友
                 var knife = new CBasePlayerWeapon(knifePointer);
                 if (knife.IsValid && teammate.Pawn?.Value != null)
                 {
                     knife.Teleport(teammate.Pawn.Value.AbsOrigin);
                 }
             }
-            
+
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[CS2DropKnife] 掉落刀具时出错: {ex.Message}");
+            Console.WriteLine($"[背水平台] 掉落刀具时出错: {ex.Message}");
             return false;
         }
     }
@@ -501,16 +436,16 @@ public class CS2DropKnife : BasePlugin
     private List<CCSPlayerController> GetTeammates(CCSPlayerController player)
     {
         var teammates = new List<CCSPlayerController>();
-        var teamSlots = player.Team == CsTeam.CounterTerrorist ? _ctPlayers : _tPlayers;
+        var allPlayers = Utilities.GetPlayers();
 
-        foreach (var slot in teamSlots)
+        foreach (var p in allPlayers)
         {
-            if (slot == player.Slot)
+            if (!IsValidPlayer(p) || !p.PawnIsAlive)
                 continue;
-
-            var teammate = Utilities.GetPlayerFromSlot(slot);
-            if (IsValidPlayer(teammate) && teammate.PawnIsAlive)
-                teammates.Add(teammate);
+            if (p.Slot == player.Slot)
+                continue;
+            if (p.Team == player.Team)
+                teammates.Add(p);
         }
 
         return teammates;
@@ -518,22 +453,21 @@ public class CS2DropKnife : BasePlugin
 
     private CCSGameRules? GetGameRules()
     {
-        // 缓存游戏规则对象，避免重复查找
         if (_cachedGameRules != null && (DateTime.Now - _lastRulesCacheTime).TotalSeconds < 5)
             return _cachedGameRules;
 
         var proxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
         _cachedGameRules = proxy?.GameRules;
         _lastRulesCacheTime = DateTime.Now;
-        
+
         return _cachedGameRules;
     }
 
     private bool IsValidPlayer(CCSPlayerController? player)
     {
-        return player != null && 
-               player.IsValid && 
-               !player.IsHLTV && 
+        return player != null &&
+               player.IsValid &&
+               !player.IsHLTV &&
                !player.IsBot &&
                player.PlayerPawn != null &&
                player.PlayerPawn.IsValid &&
@@ -546,7 +480,7 @@ public class CS2DropKnife : BasePlugin
             return false;
 
         string lowerName = designerName.ToLower();
-        
+
         return lowerName.Contains("knife") ||
                lowerName.Contains("bayonet") ||
                lowerName.Contains("karambit") ||
@@ -556,8 +490,7 @@ public class CS2DropKnife : BasePlugin
 
     private void PrintToPlayer(CCSPlayerController player, string message)
     {
-        // 使用绿色前缀：\x04 表示绿色，\x01 表示恢复到默认颜色
-        player.PrintToChat($"[\x04CS2DropKnife\x01] {message}");
+        player.PrintToChat($"[\x04背水平台\x01] {message}");
     }
 
     [GameEventHandler]
@@ -569,8 +502,6 @@ public class CS2DropKnife : BasePlugin
         try
         {
             var playerController = @event.Userid;
-            
-            // 从事件中获取玩家
             if (playerController <= 0)
                 return HookResult.Continue;
 
@@ -580,7 +511,6 @@ public class CS2DropKnife : BasePlugin
 
             string message = @event.Text?.ToLower() ?? "";
 
-            // 检查聊天命令
             if (message.StartsWith("!drop") || message.StartsWith("/drop") || message.StartsWith(".drop") ||
                 message == "!d" || message == "/d" || message == ".d" ||
                 message.StartsWith("!takeknife") || message.StartsWith("/takeknife") || message.StartsWith(".takeknife"))
@@ -590,14 +520,13 @@ public class CS2DropKnife : BasePlugin
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[CS2DropKnife] 处理聊天事件时出错: {ex.Message}");
+            Console.WriteLine($"[背水平台] 处理聊天事件时出错: {ex.Message}");
         }
 
         return HookResult.Continue;
     }
 }
 
-// 插件配置类
 public class PluginConfig
 {
     public bool FreezeTimeOnly { get; set; } = true;
@@ -606,6 +535,4 @@ public class PluginConfig
     public bool ChatFiltering { get; set; } = true;
     public int CooldownSeconds { get; set; } = 10;
     public int MaxKnivesPerDrop { get; set; } = 10;
-    
-    public PluginConfig() { }
 }
